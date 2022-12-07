@@ -1,8 +1,8 @@
 import os
 import shutil
-
 from PIL import Image
 
+# 初始化参数
 path = os.getcwd()
 # 原图片文件夹
 img_path = os.path.join(path, "imgs")
@@ -14,12 +14,18 @@ GIF_path = os.path.join(path, "GIF_path")
 img_files = []
 # 复制后的图片列表
 copy_imgs_list = []
+# PNG 图片处理队列
+PNG_list = []
 # 指定尺寸
 width = 999
 height = 999
 
 
 def main():
+    """
+    主程序
+    :return: None
+    """
     # 创建文件夹，用于存放图片
     print("文件根目录为：" + path)
     mkdir(img_path)
@@ -46,6 +52,11 @@ def main():
 
 # 过滤筛选非静态图片
 def filter_img(path):
+    """
+    对图片进行筛选，修改异常图片（单帧 GIF 图，PNG 格式保存的 GIF 图等）
+    :param path: 源图片文件路径
+    :return: 图片文件名列表
+    """
     # 获取原图文件夹内文件列表
     dir_files = os.listdir(path)
     # 文件列表不为空时继续执行，否则返回 0
@@ -53,15 +64,40 @@ def filter_img(path):
         print("文件列表：")
         print(dir_files)
         print("---------------------------------------")
+        nfile = ""
         for file in dir_files:
-            if os.path.splitext(file)[1] == ".png" \
-                    or os.path.splitext(file)[1] == ".jpg" \
+            index = dir_files.index(file)
+            # 分离文件名与后缀，进行筛选
+            if os.path.splitext(file)[1] == ".png":
+                # 将 .png 后缀修改为 gif，再进行帧数检查
+                nfile = suffix_modification(file, 1)
+                if check_fps(nfile) == 2:    # 帧数 > 1 代表原图应为 GIF 图片，保存后移动到 GIF 目录中
+                    dir_files[index] = nfile
+                    shutil.move(path + "\\" + dir_files[index],
+                                GIF_path + "\\" + nfile)
+                else:
+                    # 帧数 <= 1 说明为单帧 PNG，后缀修改回 PNG
+                    nfile = suffix_modification(nfile, 3)
+                    dir_files[index] = nfile
+                    img_files.append(dir_files[dir_files.index(file)])
+
+            elif os.path.splitext(file)[1] == ".jpg" \
                     or os.path.splitext(file)[1] == ".jpeg":
                 img_files.append(dir_files[dir_files.index(file)])
+
             # 遇到 GIF 文件自动移动到 GIF 文件夹中
             elif os.path.splitext(file)[1] == ".gif":
-                shutil.move(path + "\\" + dir_files[dir_files.index(file)],
+                nfile = file
+                fps = check_fps(dir_files[index])
+                if fps == 2:
+                    shutil.move(path + "\\" + dir_files[dir_files.index(file)],
                             GIF_path + "\\" + dir_files[dir_files.index(file)])
+                else:
+                    # 帧数 <= 1 说明为单帧 GIF，后缀修改为 jpg
+                    nfile = suffix_modification(nfile, 2)
+                    dir_files[index] = nfile
+                    img_files.append(dir_files[index])
+
         print("符合条件的文件为：")
         print(img_files)
         print("---------------------------------------")
@@ -70,48 +106,111 @@ def filter_img(path):
         return 0
 
 
+def suffix_modification(file, flag):
+    """
+    对以下情况通过 flag 判断，并修正后缀：
+    1. 以 png 格式保存的多帧 gif；2. 以 png 格式保存的多帧 GIF 图；3. 还原 png 格式后缀
+    :param file: 文件名.后缀
+    :param flag: 1:改 .gif 后缀；2：改 .jpg 后缀；3：改 .png 后缀
+    :return: 修改后的文件名.后缀
+    """
+    if flag == 1:
+        shutil.move(os.path.join(img_path, file), os.path.join(img_path, os.path.splitext(file)[0] + ".gif"))
+        file = os.path.splitext(file)[0] + ".gif"
+        return file
+    if flag == 2:
+        shutil.move(os.path.join(img_path, file), os.path.join(img_path, os.path.splitext(file)[0] + ".jpg"))
+        file = os.path.splitext(file)[0] + ".jpg"
+        return file
+    if flag == 3:
+        shutil.move(os.path.join(img_path, file), os.path.join(img_path, os.path.splitext(file)[0] + ".png"))
+        file = os.path.splitext(file)[0] + ".png"
+        return file
+
+
+def check_fps(img):
+    """
+    用于图片帧数检查
+    :param img: 图片文件名
+    :return: 0：异常及其他情况；1：单帧图片；2：多帧图片
+    """
+    print("对图片【{0}】进行帧数检查……".format(img))
+    img = Image.open("imgs\\" + img)
+    try:
+        if img.n_frames > 1:
+            return 2
+        else:
+            return 1
+    except:
+        return 0
+    finally:
+        print("帧数检查完成")
+
+
 # 复制一份原图
-def copy_imgs(path, copy_of_img, img_files):
+def copy_imgs(path, copy_of_img_path, img_files):
+    """
+    :param path: 源文件文件夹路径
+    :param copy_of_img_path: 源文件拷贝的文件夹路径
+    :param img_files: 源文件的文件夹列表
+    :return: 源文件拷贝的列表
+    """
     for file_name in img_files:
-        shutil.copy(path + "\\" + file_name, copy_of_img + "\\" + file_name)
-    copy_imgs_list = os.listdir(copy_of_img)
+        shutil.copy(path + "\\" + file_name, copy_of_img_path + "\\" + file_name)
+    copy_imgs_list = os.listdir(copy_of_img_path)
     return copy_imgs_list
 
 
-# 创建文件夹
 def mkdir(path):
+    """
+    检查并创建文件夹
+    :param path: 所创建的文件夹名
+    :return: None
+    """
     if not os.path.exists(path):
         os.mkdir(path)
 
 
-# 清除临时文件
 def clear_temp():
+    """
+    删除临时创建的文件夹
+    :return: None
+    """
+    # 删除存放复制图片的文件夹
     if os.path.exists(copy_of_img_path):
         shutil.rmtree(copy_of_img_path)
 
-# 修改不符合表情包规则的图片
+
 def resize(img_files):
+    """
+    修改不符合微信表情包规则的图片，即长或宽 >= 1000 像素的图片
+    :param img_files: 图片文件名列表
+    :return: 0：出现异常；
+    """
     if len(img_files) != 0:
         count = 0
         for i in range(len(img_files)):
             img = Image.open(os.path.join(img_path, img_files[i]))
-            img_size = img.size  # [0]是宽，[1]是长
-            # 查找超过 1000 * 1000 分辨率的图片
-            if img_size[0] >= 1000 and img_size[1] >= 1000:
-                count += 1
-                # 修改分辨率
-                img_resize = img.resize((width, height), Image.Resampling.LANCZOS)
-                img_resize.save(img_path + "//" + img_files[i])
-            elif img_size[0] >= 1000 and img_size[1] < 1000:
-                count += 1
-                # 修改分辨率
-                img_resize = img.resize((width, img_size[1]), Image.Resampling.LANCZOS)
-                img_resize.save(img_path + "//" + img_files[i])
-            elif img_size[1] >= 1000 and img_size[0] < 1000:
-                count += 1
-                # 修改分辨率
-                img_resize = img.resize((img_size[0], height), Image.Resampling.LANCZOS)
-                img_resize.save(img_path + "//" + img_files[i])
+            try:
+                img_size = img.size  # [0]是宽，[1]是长
+                # 查找超过 1000 * 1000 分辨率的图片
+                if img_size[0] >= 1000 and img_size[1] >= 1000:
+                    count += 1
+                    # 修改分辨率
+                    img_resize = img.resize((width, height), Image.Resampling.LANCZOS)
+                    img_resize.save(img_path + "//" + img_files[i])
+                elif img_size[0] >= 1000 and img_size[1] < 1000:
+                    count += 1
+                    # 修改分辨率
+                    img_resize = img.resize((width, img_size[1]), Image.Resampling.LANCZOS)
+                    img_resize.save(img_path + "//" + img_files[i])
+                elif img_size[1] >= 1000 and img_size[0] < 1000:
+                    count += 1
+                    # 修改分辨率
+                    img_resize = img.resize((img_size[0], height), Image.Resampling.LANCZOS)
+                    img_resize.save(img_path + "//" + img_files[i])
+            except:
+                "发生异常！"
         if count != 0:
             print("检测出不符合分辨率标准的图片{0}张，正在处理中……".format(count))
         else:
@@ -120,8 +219,14 @@ def resize(img_files):
         return 0
 
 
-# 转换 GIF
 def img2gif(img_files, copy_imgs_list, GIF_path):
+    """
+    完成 2 帧的 GIF 转换
+    :param img_files: 图片的文件名列表
+    :param copy_imgs_list: 复制图片的文件名列表
+    :param GIF_path: 存放转换后 GIF 的路径
+    :return:
+    """
     for i in range(len(img_files)):
         gif_img = []
         gif_name = ""
