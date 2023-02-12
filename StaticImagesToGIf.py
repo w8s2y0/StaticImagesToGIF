@@ -48,7 +48,7 @@ def main():
     else:
         print('图片文件夹为空，请检查……')
         clear_temp()
-
+        
 
 # 过滤筛选非静态图片
 def filter_img(path):
